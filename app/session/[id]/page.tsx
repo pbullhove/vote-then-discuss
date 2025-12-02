@@ -17,6 +17,11 @@ interface Answer {
   user_id: string
 }
 
+interface Session {
+  id: string
+  name: string | null
+}
+
 export default function SessionPage() {
   const params = useParams()
   const router = useRouter()
@@ -24,17 +29,22 @@ export default function SessionPage() {
   const sessionId = params.id as string
   const supabase = createClient()
 
+  const [session, setSession] = useState<Session | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, Answer[]>>({})
   const [isSubmitted, setIsSubmitted] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [showQuestionInput, setShowQuestionInput] = useState(false)
+  const [newQuestionText, setNewQuestionText] = useState('')
+  const [isAddingQuestion, setIsAddingQuestion] = useState(false)
   
   const userId = user?.id || ''
 
   useEffect(() => {
     if (!authLoading && userId) {
+      loadSessionData()
       loadSession()
       checkSubmissionStatus()
     }
@@ -59,6 +69,21 @@ export default function SessionPage() {
       }
     }
   }, [isSubmitted, sessionId])
+
+  const loadSessionData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('sessions')
+        .select('id, name')
+        .eq('id', sessionId)
+        .single()
+
+      if (error) throw error
+      setSession(data)
+    } catch (error) {
+      console.error('Error loading session data:', error)
+    }
+  }
 
   const loadSession = async () => {
     try {
@@ -172,17 +197,26 @@ export default function SessionPage() {
     }
   }
 
-  const addQuestion = async () => {
-    const questionText = prompt('Enter your question:')
-    if (!questionText?.trim()) return
+  const handleAddQuestionClick = () => {
+    setShowQuestionInput(true)
+  }
 
+  const handleCancelAddQuestion = () => {
+    setShowQuestionInput(false)
+    setNewQuestionText('')
+  }
+
+  const addQuestion = async () => {
+    if (!newQuestionText?.trim()) return
+
+    setIsAddingQuestion(true)
     try {
       const nextOrder = questions.length + 1
       const { data, error } = await supabase
         .from('questions')
         .insert({
           session_id: sessionId,
-          question_text: questionText.trim(),
+          question_text: newQuestionText.trim(),
           question_order: nextOrder,
         })
         .select()
@@ -191,10 +225,21 @@ export default function SessionPage() {
       if (error) throw error
       if (data) {
         setQuestions((prev) => [...prev, data])
+        setNewQuestionText('')
+        setShowQuestionInput(false)
       }
     } catch (error) {
       console.error('Error adding question:', error)
       alert('Failed to add question. Please try again.')
+    } finally {
+      setIsAddingQuestion(false)
+    }
+  }
+
+  const handleQuestionInputKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault()
+      addQuestion()
     }
   }
 
@@ -211,7 +256,9 @@ export default function SessionPage() {
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-gray-800">Session</h1>
+            <h1 className="text-2xl font-bold text-gray-800">
+              {session?.name || `Session ${sessionId}`}
+            </h1>
             <button
               onClick={() => router.push('/')}
               className="text-gray-600 hover:text-gray-800"
@@ -220,17 +267,6 @@ export default function SessionPage() {
             </button>
           </div>
           <p className="text-sm text-gray-500 mb-4">Session ID: {sessionId}</p>
-          
-          {questions.length === 0 && !isSubmitted && (
-            <div className="mb-4">
-              <button
-                onClick={addQuestion}
-                className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-              >
-                + Add First Question
-              </button>
-            </div>
-          )}
         </div>
 
         {!isSubmitted ? (
@@ -239,11 +275,39 @@ export default function SessionPage() {
               <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
                 <p className="text-gray-600 mb-4">No questions yet. Add your first question!</p>
                 <button
-                  onClick={addQuestion}
+                  onClick={handleAddQuestionClick}
                   className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors"
                 >
                   + Add Question
                 </button>
+                {showQuestionInput && (
+                  <div className="mt-6 text-left">
+                    <textarea
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      onKeyDown={handleQuestionInputKeyDown}
+                      placeholder="Enter your question..."
+                      className="w-full bg-white border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none mb-3"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={handleCancelAddQuestion}
+                        className="text-gray-600 hover:text-gray-800 font-medium px-4 py-2"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={addQuestion}
+                        disabled={isAddingQuestion || !newQuestionText.trim()}
+                        className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isAddingQuestion ? 'Adding...' : 'Add Question'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : (
               <>
@@ -262,9 +326,40 @@ export default function SessionPage() {
                     />
                   </div>
                 ))}
+                {showQuestionInput && (
+                  <div className="bg-white rounded-2xl shadow-lg p-6">
+                    <label className="block text-gray-800 font-medium mb-2">
+                      New Question
+                    </label>
+                    <textarea
+                      value={newQuestionText}
+                      onChange={(e) => setNewQuestionText(e.target.value)}
+                      onKeyDown={handleQuestionInputKeyDown}
+                      placeholder="Enter your question..."
+                      className="w-full bg-white border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none mb-3"
+                      rows={3}
+                      autoFocus
+                    />
+                    <div className="flex gap-2 justify-end">
+                      <button
+                        onClick={handleCancelAddQuestion}
+                        className="text-gray-600 hover:text-gray-800 font-medium px-4 py-2"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={addQuestion}
+                        disabled={isAddingQuestion || !newQuestionText.trim()}
+                        className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {isAddingQuestion ? 'Adding...' : 'Add Question'}
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="bg-white rounded-2xl shadow-lg p-6 flex justify-between items-center">
                   <button
-                    onClick={addQuestion}
+                    onClick={handleAddQuestionClick}
                     className="text-gray-600 hover:text-gray-800 font-medium"
                   >
                     + Add Another Question
