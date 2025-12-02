@@ -67,10 +67,13 @@ ALTER TABLE questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE answers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE submissions ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies: Users can only see and manage their own sessions
+-- RLS Policies: Sessions are publicly readable, but only owners can modify
 DROP POLICY IF EXISTS "Allow all operations on sessions" ON sessions;
-CREATE POLICY "Users can view their own sessions" ON sessions
-  FOR SELECT USING (auth.uid() = user_id);
+DROP POLICY IF EXISTS "Users can view their own sessions" ON sessions;
+DROP POLICY IF EXISTS "Anyone can view sessions" ON sessions;
+-- Allow anyone to read sessions (needed for anonymous participation)
+CREATE POLICY "Anyone can view sessions" ON sessions
+  FOR SELECT USING (true);
 CREATE POLICY "Users can create their own sessions" ON sessions
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update their own sessions" ON sessions

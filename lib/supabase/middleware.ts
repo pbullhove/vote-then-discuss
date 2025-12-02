@@ -1,6 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/**
+ * Updates the Supabase session by refreshing the auth cookies and returns the user.
+ * This function handles cookie management but does not perform route protection.
+ * Route protection should be handled in the root middleware.ts file.
+ * 
+ * @returns An object containing the response (with updated cookies) and the user
+ */
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -35,17 +42,6 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser()
 
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith('/login') &&
-    !request.nextUrl.pathname.startsWith('/auth')
-  ) {
-    // no user, potentially respond by redirecting the user to the login page
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:
   // 1. Pass the request in it, like so:
@@ -59,6 +55,6 @@ export async function updateSession(request: NextRequest) {
   // If this is not done, you may be causing the browser to delete cookies,
   // which will cause logging in to be impossible.
 
-  return supabaseResponse
+  return { response: supabaseResponse, user }
 }
 

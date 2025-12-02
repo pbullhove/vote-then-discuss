@@ -1,35 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { useParams, useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useEffect, useState, useMemo } from 'react'
+import { useParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
-
-interface Question {
-  id: string
-  question_text: string
-  question_order: number
-}
-
-interface Answer {
-  id: string
-  answer_text: string
-  user_id: string
-}
-
-interface Session {
-  id: string
-  name: string | null
-}
+import { sessionService, type Question, type Answer } from '@/lib/services/session-service'
+import { SessionHeader } from '@/components/session/SessionHeader'
+import { LoadingState } from '@/components/session/LoadingState'
+import { EmptyQuestionsState } from '@/components/session/EmptyQuestionsState'
+import { QuestionInput } from '@/components/session/QuestionInput'
+import { AnonymousNameInput } from '@/components/session/AnonymousNameInput'
+import { QuestionCard } from '@/components/session/QuestionCard'
+import { SubmissionSuccess } from '@/components/session/SubmissionSuccess'
+import { AnswersView } from '@/components/session/AnswersView'
 
 export default function SessionPage() {
   const params = useParams()
-  const router = useRouter()
   const { user, loading: authLoading } = useAuth()
   const sessionId = params.id as string
-  const supabase = createClient()
 
-  const [session, setSession] = useState<Session | null>(null)
+  const [session, setSession] = useState<{ id: string; name: string | null } | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, Answer[]>>({})
@@ -39,64 +28,72 @@ export default function SessionPage() {
   const [showQuestionInput, setShowQuestionInput] = useState(false)
   const [newQuestionText, setNewQuestionText] = useState('')
   const [isAddingQuestion, setIsAddingQuestion] = useState(false)
+  const [anonymousUserId, setAnonymousUserId] = useState<string>('')
+  const [anonymousUserName, setAnonymousUserName] = useState<string>('')
+  const [submittedUserId, setSubmittedUserId] = useState<string>('')
   
-  const userId = user?.id || ''
+  // Generate or retrieve anonymous user ID and name for non-authenticated users
+  useEffect(() => {
+    if (!user && !authLoading) {
+      let storedId = localStorage.getItem(`anonymous_user_id_${sessionId}`)
+      let storedName = localStorage.getItem(`anonymous_user_name_${sessionId}`)
+      
+      if (!storedId) {
+        storedId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        localStorage.setItem(`anonymous_user_id_${sessionId}`, storedId)
+      }
+      
+      if (storedName) {
+        setAnonymousUserName(storedName)
+        // If we have a stored name, construct the submitted user ID format
+        const expectedUserId = `anon_${storedName.trim()}_${storedId.split('_').slice(1).join('_')}`
+        setSubmittedUserId(expectedUserId)
+      }
+      
+      setAnonymousUserId(storedId)
+    }
+  }, [user, authLoading, sessionId])
+  
+  const userId = user?.id || anonymousUserId
+  
+  // Create stable dependency values to prevent array size changes
+  const stableUserId = useMemo(() => user?.id || '', [user?.id])
+  const stableAnonymousUserId = useMemo(() => anonymousUserId || '', [anonymousUserId])
+  const stableAnonymousUserName = useMemo(() => anonymousUserName || '', [anonymousUserName])
 
   useEffect(() => {
-    if (!authLoading && userId) {
+    if (!authLoading) {
       loadSessionData()
-      loadSession()
-      checkSubmissionStatus()
+      loadQuestions()
+      if (userId || (anonymousUserId && anonymousUserName)) {
+        checkSubmissionStatus()
+      }
     }
-  }, [sessionId, authLoading, userId])
+  }, [sessionId, authLoading, stableUserId, stableAnonymousUserId, stableAnonymousUserName])
 
   useEffect(() => {
     if (isSubmitted) {
       loadAllAnswers()
       // Subscribe to new answers
-      const channel = supabase
-        .channel(`session:${sessionId}`)
-        .on('postgres_changes', 
-          { event: 'INSERT', schema: 'public', table: 'answers' },
-          () => {
-            loadAllAnswers()
-          }
-        )
-        .subscribe()
+      const unsubscribe = sessionService.subscribeToAnswers(sessionId, () => {
+        loadAllAnswers()
+      })
 
-      return () => {
-        supabase.removeChannel(channel)
-      }
+      return unsubscribe
     }
   }, [isSubmitted, sessionId])
 
   const loadSessionData = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('id, name')
-        .eq('id', sessionId)
-        .single()
-
-      if (error) throw error
-      setSession(data)
-    } catch (error) {
-      console.error('Error loading session data:', error)
-    }
+    const data = await sessionService.loadSession(sessionId)
+    setSession(data)
   }
 
-  const loadSession = async () => {
+  const loadQuestions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('questions')
-        .select('*')
-        .eq('session_id', sessionId)
-        .order('question_order', { ascending: true })
-
-      if (error) throw error
-      setQuestions(data || [])
+      const data = await sessionService.loadQuestions(sessionId)
+      setQuestions(data)
     } catch (error) {
-      console.error('Error loading session:', error)
+      console.error('Error loading questions:', error)
     } finally {
       setIsLoading(false)
     }
@@ -104,14 +101,21 @@ export default function SessionPage() {
 
   const checkSubmissionStatus = async () => {
     try {
-      const { data } = await supabase
-        .from('submissions')
-        .select('*')
-        .eq('session_id', sessionId)
-        .eq('user_id', userId)
-        .single()
+      let userIdToCheck: string
+      
+      if (user) {
+        userIdToCheck = userId
+      } else if (anonymousUserId && anonymousUserName) {
+        // Check for submission with the name-based user_id format
+        userIdToCheck = `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
+      } else {
+        return // Can't check without user info
+      }
+      
+      const submission = await sessionService.checkSubmissionStatus(sessionId, userIdToCheck)
 
-      if (data) {
+      if (submission) {
+        setSubmittedUserId(submission.user_id)
         setIsSubmitted(true)
         loadAllAnswers()
       }
@@ -122,22 +126,7 @@ export default function SessionPage() {
 
   const loadAllAnswers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('answers')
-        .select('*')
-        .eq('session_id', sessionId)
-
-      if (error) throw error
-
-      // Group answers by question_id
-      const grouped: Record<string, Answer[]> = {}
-      data?.forEach((answer) => {
-        if (!grouped[answer.question_id]) {
-          grouped[answer.question_id] = []
-        }
-        grouped[answer.question_id].push(answer)
-      })
-
+      const grouped = await sessionService.loadAllAnswers(sessionId)
       setSubmittedAnswers(grouped)
     } catch (error) {
       console.error('Error loading answers:', error)
@@ -150,48 +139,56 @@ export default function SessionPage() {
 
   const handleSubmit = async () => {
     if (questions.length === 0) {
-      alert('Please add questions to this session first.')
+      alert('Vennligst legg til spørsmål til denne økten først.')
+      return
+    }
+
+    if (!userId) {
+      alert('Kunne ikke sende inn. Vennligst oppdater siden og prøv igjen.')
+      return
+    }
+
+    // For non-authenticated users, require a name
+    if (!user && !anonymousUserName?.trim()) {
+      alert('Vennligst skriv inn navnet ditt før du sender inn.')
       return
     }
 
     // Check if all questions are answered
     const unanswered = questions.filter((q) => !answers[q.id]?.trim())
     if (unanswered.length > 0) {
-      alert(`Please answer all ${questions.length} question(s) before submitting.`)
+      alert(`Vennligst svar på alle ${questions.length} spørsmål før du sender inn.`)
       return
     }
 
     setIsSubmitting(true)
     try {
-      // Insert all answers
+      // For anonymous users, use name in user_id format: "anon_<name>_<id>"
+      const finalUserId = user 
+        ? userId 
+        : `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
+      
+      // Store the submitted user ID for comparison later
+      setSubmittedUserId(finalUserId)
+      
+      // Store the name in localStorage
+      if (!user) {
+        localStorage.setItem(`anonymous_user_name_${sessionId}`, anonymousUserName.trim())
+      }
+
+      // Prepare answers for submission
       const answerEntries = questions.map((q) => ({
         question_id: q.id,
-        session_id: sessionId,
         answer_text: answers[q.id],
-        user_id: userId,
       }))
 
-      const { error: answersError } = await supabase
-        .from('answers')
-        .upsert(answerEntries, { onConflict: 'question_id,user_id' })
-
-      if (answersError) throw answersError
-
-      // Mark as submitted
-      const { error: submissionError } = await supabase
-        .from('submissions')
-        .insert({
-          session_id: sessionId,
-          user_id: userId,
-        })
-
-      if (submissionError) throw submissionError
+      await sessionService.submitAnswers(sessionId, finalUserId, answerEntries)
 
       setIsSubmitted(true)
       loadAllAnswers()
     } catch (error) {
       console.error('Error submitting answers:', error)
-      alert('Failed to submit answers. Please try again.')
+      alert('Kunne ikke sende inn svar. Vennligst prøv igjen.')
     } finally {
       setIsSubmitting(false)
     }
@@ -212,25 +209,18 @@ export default function SessionPage() {
     setIsAddingQuestion(true)
     try {
       const nextOrder = questions.length + 1
-      const { data, error } = await supabase
-        .from('questions')
-        .insert({
-          session_id: sessionId,
-          question_text: newQuestionText.trim(),
-          question_order: nextOrder,
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-      if (data) {
-        setQuestions((prev) => [...prev, data])
-        setNewQuestionText('')
-        setShowQuestionInput(false)
-      }
+      const newQuestion = await sessionService.addQuestion(
+        sessionId,
+        newQuestionText,
+        nextOrder
+      )
+      
+      setQuestions((prev) => [...prev, newQuestion])
+      setNewQuestionText('')
+      setShowQuestionInput(false)
     } catch (error) {
       console.error('Error adding question:', error)
-      alert('Failed to add question. Please try again.')
+      alert('Kunne ikke legge til spørsmål. Vennligst prøv igjen.')
     } finally {
       setIsAddingQuestion(false)
     }
@@ -243,133 +233,68 @@ export default function SessionPage() {
     }
   }
 
-  if (authLoading || isLoading || !userId) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Loading session...</div>
-      </div>
-    )
+  if (authLoading || isLoading || (!user && !anonymousUserId)) {
+    return <LoadingState />
   }
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold text-gray-800">
-              {session?.name || `Session ${sessionId}`}
-            </h1>
-            <button
-              onClick={() => router.push('/')}
-              className="text-gray-600 hover:text-gray-800"
-            >
-              ← Back
-            </button>
-          </div>
-          <p className="text-sm text-gray-500 mb-4">Session ID: {sessionId}</p>
-        </div>
+        <SessionHeader sessionName={session?.name || null} sessionId={sessionId} />
 
         {!isSubmitted ? (
           <div className="space-y-4">
             {questions.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
-                <p className="text-gray-600 mb-4">No questions yet. Add your first question!</p>
-                <button
-                  onClick={handleAddQuestionClick}
-                  className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-                >
-                  + Add Question
-                </button>
-                {showQuestionInput && (
-                  <div className="mt-6 text-left">
-                    <textarea
-                      value={newQuestionText}
-                      onChange={(e) => setNewQuestionText(e.target.value)}
-                      onKeyDown={handleQuestionInputKeyDown}
-                      placeholder="Enter your question..."
-                      className="w-full bg-white border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none mb-3"
-                      rows={3}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        onClick={handleCancelAddQuestion}
-                        className="text-gray-600 hover:text-gray-800 font-medium px-4 py-2"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={addQuestion}
-                        disabled={isAddingQuestion || !newQuestionText.trim()}
-                        className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isAddingQuestion ? 'Adding...' : 'Add Question'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <EmptyQuestionsState
+                showQuestionInput={showQuestionInput}
+                newQuestionText={newQuestionText}
+                isAddingQuestion={isAddingQuestion}
+                onAddQuestionClick={handleAddQuestionClick}
+                onCancelAddQuestion={handleCancelAddQuestion}
+                onQuestionTextChange={setNewQuestionText}
+                onAddQuestion={addQuestion}
+                onQuestionInputKeyDown={handleQuestionInputKeyDown}
+              />
             ) : (
               <>
+                {!user && (
+                  <AnonymousNameInput
+                    anonymousUserName={anonymousUserName}
+                    onNameChange={setAnonymousUserName}
+                  />
+                )}
                 {questions.map((question, index) => (
-                  <div key={question.id} className="bg-white rounded-2xl shadow-lg p-6">
-                    <label className="block text-gray-800 font-medium mb-2">
-                      Question {index + 1}
-                    </label>
-                    <p className="text-gray-700 mb-4">{question.question_text}</p>
-                    <textarea
-                      value={answers[question.id] || ''}
-                      onChange={(e) => handleAnswerChange(question.id, e.target.value)}
-                      placeholder="Type your answer here..."
-                      className="w-full bg-white border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none"
-                      rows={4}
-                    />
-                  </div>
+                  <QuestionCard
+                    key={question.id}
+                    questionNumber={index + 1}
+                    questionText={question.question_text}
+                    answer={answers[question.id] || ''}
+                    onAnswerChange={(value) => handleAnswerChange(question.id, value)}
+                  />
                 ))}
                 {showQuestionInput && (
-                  <div className="bg-white rounded-2xl shadow-lg p-6">
-                    <label className="block text-gray-800 font-medium mb-2">
-                      New Question
-                    </label>
-                    <textarea
-                      value={newQuestionText}
-                      onChange={(e) => setNewQuestionText(e.target.value)}
-                      onKeyDown={handleQuestionInputKeyDown}
-                      placeholder="Enter your question..."
-                      className="w-full bg-white border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none mb-3"
-                      rows={3}
-                      autoFocus
-                    />
-                    <div className="flex gap-2 justify-end">
-                      <button
-                        onClick={handleCancelAddQuestion}
-                        className="text-gray-600 hover:text-gray-800 font-medium px-4 py-2"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={addQuestion}
-                        disabled={isAddingQuestion || !newQuestionText.trim()}
-                        className="bg-gray-800 text-white py-2 px-4 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {isAddingQuestion ? 'Adding...' : 'Add Question'}
-                      </button>
-                    </div>
-                  </div>
+                  <QuestionInput
+                    newQuestionText={newQuestionText}
+                    isAddingQuestion={isAddingQuestion}
+                    onQuestionTextChange={setNewQuestionText}
+                    onCancel={handleCancelAddQuestion}
+                    onAdd={addQuestion}
+                    onKeyDown={handleQuestionInputKeyDown}
+                  />
                 )}
                 <div className="bg-white rounded-2xl shadow-lg p-6 flex justify-between items-center">
                   <button
                     onClick={handleAddQuestionClick}
                     className="text-gray-600 hover:text-gray-800 font-medium"
                   >
-                    + Add Another Question
+                    + Legg til et spørsmål til
                   </button>
                   <button
                     onClick={handleSubmit}
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (!user && !anonymousUserName?.trim())}
                     className="bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {isSubmitting ? 'Submitting...' : 'Submit Answers'}
+                    {isSubmitting ? 'Sender inn...' : 'Send inn svar'}
                   </button>
                 </div>
               </>
@@ -377,49 +302,16 @@ export default function SessionPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6">
-              <h2 className="text-xl font-bold text-green-800 mb-2">✓ Answers Submitted!</h2>
-              <p className="text-green-700">You can now see everyone's responses below.</p>
-            </div>
-
-            {questions.map((question, index) => {
-              const questionAnswers = submittedAnswers[question.id] || []
-              return (
-                <div key={question.id} className="bg-white rounded-2xl shadow-lg p-6">
-                  <h3 className="text-lg font-bold text-gray-800 mb-4">
-                    Question {index + 1}: {question.question_text}
-                  </h3>
-                  <div className="space-y-3">
-                    {questionAnswers.length === 0 ? (
-                      <p className="text-gray-500 italic">No answers yet.</p>
-                    ) : (
-                      questionAnswers.map((answer) => (
-                        <div
-                          key={answer.id}
-                          className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4"
-                        >
-                          <div className="flex justify-between items-start mb-2">
-                            <span className="text-xs text-gray-500 font-medium">
-                              {answer.user_id === userId ? 'You' : `User ${answer.user_id.slice(0, 8)}...`}
-                            </span>
-                            {answer.user_id === userId && (
-                              <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                                Your answer
-                              </span>
-                            )}
-                          </div>
-                          <p className="text-gray-800">{answer.answer_text}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )
-            })}
+            <SubmissionSuccess />
+            <AnswersView
+              questions={questions}
+              submittedAnswers={submittedAnswers}
+              currentUserId={userId}
+              submittedUserId={submittedUserId}
+            />
           </div>
         )}
       </div>
     </div>
   )
 }
-

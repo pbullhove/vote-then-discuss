@@ -15,7 +15,6 @@ interface Session {
 export default function Home() {
   const router = useRouter()
   const { user, loading: authLoading, signOut } = useAuth()
-  const [isCreating, setIsCreating] = useState(false)
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
   const supabase = createClient()
@@ -48,80 +47,13 @@ export default function Home() {
     }
   }
 
-  const generateSessionId = () => {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-    let result = ''
-    for (let i = 0; i < 4; i++) {
-      result += chars.charAt(Math.floor(Math.random() * chars.length))
-    }
-    return result
-  }
-
-  const createSession = async () => {
-    if (!user) {
-      alert('You must be logged in to create a session.')
-      return
-    }
-
-    // Prompt for session name
-    const sessionName = prompt('Enter a name for this session (optional):')
-    if (sessionName === null) {
-      // User cancelled
-      return
-    }
-
-    setIsCreating(true)
-    try {
-      // Generate a unique 4-character ID
-      let sessionId = generateSessionId()
-      let attempts = 0
-      const maxAttempts = 10
-
-      // Check if ID already exists and regenerate if needed
-      while (attempts < maxAttempts) {
-        const { data: existing } = await supabase
-          .from('sessions')
-          .select('id')
-          .eq('id', sessionId)
-          .single()
-
-        if (!existing) {
-          break // ID is unique
-        }
-        sessionId = generateSessionId()
-        attempts++
-      }
-
-      if (attempts >= maxAttempts) {
-        throw new Error('Failed to generate unique session ID. Please try again.')
-      }
-
-      const { data, error } = await supabase
-        .from('sessions')
-        .insert({ 
-          id: sessionId,
-          name: sessionName?.trim() || null,
-          user_id: user.id 
-        })
-        .select()
-        .single()
-
-      if (error) throw error
-
-      if (data) {
-        router.push(`/session/${data.id}`)
-      }
-    } catch (error) {
-      console.error('Error creating session:', error)
-      alert('Failed to create session. Please try again.')
-    } finally {
-      setIsCreating(false)
-    }
+  const createSession = () => {
+    router.push('/create-session')
   }
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
-    return date.toLocaleDateString('en-US', {
+    return date.toLocaleDateString('nb-NO', {
       month: 'short',
       day: 'numeric',
       year: 'numeric',
@@ -133,7 +65,7 @@ export default function Home() {
   if (authLoading || isLoadingSessions) {
     return (
       <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Loading...</div>
+        <div className="text-gray-600">Laster...</div>
       </div>
     )
   }
@@ -144,13 +76,13 @@ export default function Home() {
         <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
           <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote Then Discuss</h1>
           <p className="text-gray-600 mb-8">
-            Please sign in to create and manage your voting sessions.
+            Vennligst logg inn for å opprette og administrere dine avstemmingsøkter.
           </p>
           <button
             onClick={() => router.push('/login')}
             className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
           >
-            Sign In
+            Logg inn
           </button>
         </div>
       </div>
@@ -165,33 +97,32 @@ export default function Home() {
             <div>
               <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote Then Discuss</h1>
               <p className="text-sm text-gray-600">
-                Signed in as {user.email}
+                Logget inn som {user.email}
               </p>
             </div>
             <button
               onClick={signOut}
               className="text-sm text-gray-600 hover:text-gray-800"
             >
-              Sign out
+              Logg ut
             </button>
           </div>
           <p className="text-gray-600 mb-6">
-            Create a session with questions. Users answer privately, then see everyone's responses.
+            Opprett en økt med spørsmål. Brukere svarer privat, deretter ser alle svarene.
           </p>
           <button
             onClick={createSession}
-            disabled={isCreating}
-            className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
           >
-            {isCreating ? 'Creating...' : 'New Session'}
+            Ny økt
           </button>
         </div>
 
         <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">My Sessions</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Mine økter</h2>
           {sessions.length === 0 ? (
             <p className="text-gray-600 text-center py-8">
-              No sessions yet. Create your first session to get started!
+              Ingen økter ennå. Opprett din første økt for å komme i gang!
             </p>
           ) : (
             <div className="space-y-3">
@@ -204,10 +135,10 @@ export default function Home() {
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="font-medium text-gray-800">
-                        {session.name || `Session ${session.id}`}
+                        {session.name || `Økt ${session.id}`}
                       </p>
                       <p className="text-sm text-gray-500">
-                        ID: {session.id} • Created {formatDate(session.created_at)}
+                        ID: {session.id} • Opprettet {formatDate(session.created_at)}
                       </p>
                     </div>
                     <svg

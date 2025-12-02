@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Vote Then Discuss",
-  description: "Create voting sessions with questions. Answer privately, then see everyone's responses.",
+  title: "Stem så diskuter",
+  description: "Opprett avstemmingsøkter med spørsmål. Svar privat, deretter se alles svar.",
 };
 
 export default function RootLayout({
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="no">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
