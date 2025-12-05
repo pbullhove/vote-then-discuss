@@ -1,16 +1,19 @@
 'use client'
 
 import { useAuth } from '@/lib/auth-context'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { useEffect } from 'react'
 
 export default function LoginPage() {
+  const searchParams = useSearchParams()
+  const redirectedFrom = searchParams.get('redirectedFrom')
   const { user, loading, signInWithGoogle } = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (!loading && user) {
-      router.push('/')
+      console.log('redirecting to', redirectedFrom)
+      router.push(redirectedFrom || '/')
     }
   }, [user, loading, router])
 

@@ -10,22 +10,43 @@ const isPublicRoute = (pathname: string): boolean => {
 }
 
 export async function middleware(request: NextRequest) {
-  // Update the session to refresh auth cookies and get the user
-  const { response, user } = await updateSession(request)
+  const url = request.nextUrl.clone();
+  const host = request.headers.get('host') || '';
 
-  // Check if the route is protected
-  if (!isPublicRoute(request.nextUrl.pathname)) {
-    // For protected routes, check if user is authenticated
+  // 1) Host-based routing
+  // Support both production and localhost for admin host
+  const isAdminHost =
+    host.startsWith('admin.votethendiscuss.com') ||
+    host.startsWith('localhost:') && host.includes('admin.');
+
+  // If admin.* and not already under /admin, internally rewrite to /admin + path
+  if (isAdminHost && !url.pathname.startsWith('/admin')) {
+    url.pathname = '/admin' + url.pathname;
+  }
+
+  // 2) Update session (auth cookies + user)
+  const { response, user } = await updateSession(request);
+
+  // Use the *effective* path (after host-based adjustment) for route protection
+  const effectivePathname = url.pathname;
+
+  // 3) Auth guard
+  if (!isPublicRoute(effectivePathname)) {
     if (!user) {
-      // Redirect to login if not authenticated
-      const url = request.nextUrl.clone()
-      url.pathname = '/login'
-      url.searchParams.set('redirectedFrom', request.nextUrl.pathname)
-      return NextResponse.redirect(url)
+      const loginUrl = request.nextUrl.clone();
+      loginUrl.pathname = '/login';
+      loginUrl.searchParams.set('redirectedFrom', effectivePathname);
+      return NextResponse.redirect(loginUrl);
     }
   }
 
-  return response
+  // 4) Apply rewrite for admin host (internal – no visible redirect)
+  if (isAdminHost) {
+    return NextResponse.rewrite(url);
+  }
+
+  // Non-admin host → normal response
+  return response;
 }
 
 export const config = {
