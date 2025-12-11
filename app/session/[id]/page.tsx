@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
 import { sessionService, type Question, type Answer } from '@/lib/services/session-service'
@@ -13,12 +13,18 @@ import { QuestionCard } from '@/components/session/QuestionCard'
 import { SubmissionSuccess } from '@/components/session/SubmissionSuccess'
 import { AnswersView } from '@/components/session/AnswersView'
 
+type SessionDetails = {
+  id: string
+  name: string | null
+  user_id: string
+}
+
 export default function SessionPage() {
   const params = useParams()
   const { user, loading: authLoading } = useAuth()
   const sessionId = params.id as string
 
-  const [session, setSession] = useState<{ id: string; name: string | null } | null>(null)
+  const [session, setSession] = useState<SessionDetails | null>(null)
   const [questions, setQuestions] = useState<Question[]>([])
   const [answers, setAnswers] = useState<Record<string, string>>({})
   const [submittedAnswers, setSubmittedAnswers] = useState<Record<string, Answer[]>>({})
@@ -28,38 +34,105 @@ export default function SessionPage() {
   const [showQuestionInput, setShowQuestionInput] = useState(false)
   const [newQuestionText, setNewQuestionText] = useState('')
   const [isAddingQuestion, setIsAddingQuestion] = useState(false)
+  const [showAnswersForUser, setShowAnswersForUser] = useState(true)
   const [anonymousUserId, setAnonymousUserId] = useState<string>('')
   const [anonymousUserName, setAnonymousUserName] = useState<string>('')
   const [submittedUserId, setSubmittedUserId] = useState<string>('')
-  
+
   // Generate or retrieve anonymous user ID and name for non-authenticated users
   useEffect(() => {
     if (!user && !authLoading) {
       let storedId = localStorage.getItem(`anonymous_user_id_${sessionId}`)
       let storedName = localStorage.getItem(`anonymous_user_name_${sessionId}`)
-      
+
       if (!storedId) {
         storedId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
         localStorage.setItem(`anonymous_user_id_${sessionId}`, storedId)
       }
-      
+
       if (storedName) {
         setAnonymousUserName(storedName)
         // If we have a stored name, construct the submitted user ID format
         const expectedUserId = `anon_${storedName.trim()}_${storedId.split('_').slice(1).join('_')}`
         setSubmittedUserId(expectedUserId)
       }
-      
+
       setAnonymousUserId(storedId)
     }
   }, [user, authLoading, sessionId])
-  
+
   const userId = user?.id || anonymousUserId
-  
+
   // Create stable dependency values to prevent array size changes
   const stableUserId = useMemo(() => user?.id || '', [user?.id])
   const stableAnonymousUserId = useMemo(() => anonymousUserId || '', [anonymousUserId])
   const stableAnonymousUserName = useMemo(() => anonymousUserName || '', [anonymousUserName])
+  const isSessionOwner = !!(session?.user_id && user?.id === session.user_id)
+  const userAnswersToggleKey = useMemo(
+    () => `session_${sessionId}_answers_visible`,
+    [sessionId]
+  )
+  const isViewingAnswers = isSubmitted && showAnswersForUser
+
+  useEffect(() => {
+    const stored = localStorage.getItem(userAnswersToggleKey)
+    if (stored !== null) {
+      setShowAnswersForUser(stored === 'true')
+    }
+  }, [userAnswersToggleKey])
+
+  const loadSessionData = useCallback(async () => {
+    const data = await sessionService.loadSession(sessionId)
+    if (data) {
+      setSession(data)
+    } else {
+      setSession(null)
+    }
+  }, [sessionId])
+
+  const loadQuestions = useCallback(async () => {
+    try {
+      const data = await sessionService.loadQuestions(sessionId)
+      setQuestions(data)
+    } catch (error) {
+      console.error('Error loading questions:', error)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [sessionId])
+
+  const checkSubmissionStatus = useCallback(async () => {
+    try {
+      let userIdToCheck: string
+
+      if (user) {
+        userIdToCheck = userId
+      } else if (anonymousUserId && anonymousUserName) {
+        // Check for submission with the name-based user_id format
+        userIdToCheck = `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
+      } else {
+        return // Can't check without user info
+      }
+
+      const submission = await sessionService.checkSubmissionStatus(sessionId, userIdToCheck)
+
+      if (submission) {
+        setSubmittedUserId(submission.user_id)
+        setIsSubmitted(true)
+      }
+    } catch (error) {
+      // User hasn't submitted yet
+    }
+  }, [anonymousUserId, anonymousUserName, sessionId, user, userId])
+
+  const loadAllAnswers = useCallback(async () => {
+    try {
+      const grouped = await sessionService.loadAllAnswers(sessionId)
+      setSubmittedAnswers(grouped)
+    } catch (error) {
+      console.error('Error loading answers:', error)
+    }
+  }, [sessionId])
 
   useEffect(() => {
     if (!authLoading) {
@@ -69,68 +142,43 @@ export default function SessionPage() {
         checkSubmissionStatus()
       }
     }
-  }, [sessionId, authLoading, stableUserId, stableAnonymousUserId, stableAnonymousUserName])
+  }, [
+    sessionId,
+    authLoading,
+    stableUserId,
+    stableAnonymousUserId,
+    stableAnonymousUserName,
+    loadSessionData,
+    loadQuestions,
+    checkSubmissionStatus,
+  ])
 
   useEffect(() => {
-    if (isSubmitted) {
+    const unsubscribe = sessionService.subscribeToSession(sessionId, () => {
+      loadSessionData()
+    })
+
+    return unsubscribe
+  }, [sessionId, loadSessionData])
+
+  useEffect(() => {
+    if (!isSubmitted || !isViewingAnswers) {
+      return
+    }
+
+    loadAllAnswers()
+    // Subscribe to new answers
+    const unsubscribe = sessionService.subscribeToAnswers(sessionId, () => {
       loadAllAnswers()
-      // Subscribe to new answers
-      const unsubscribe = sessionService.subscribeToAnswers(sessionId, () => {
-        loadAllAnswers()
-      })
+    })
 
-      return unsubscribe
-    }
-  }, [isSubmitted, sessionId])
+    return unsubscribe
+  }, [isSubmitted, isViewingAnswers, loadAllAnswers, sessionId])
 
-  const loadSessionData = async () => {
-    const data = await sessionService.loadSession(sessionId)
-    setSession(data)
-  }
-
-  const loadQuestions = async () => {
-    try {
-      const data = await sessionService.loadQuestions(sessionId)
-      setQuestions(data)
-    } catch (error) {
-      console.error('Error loading questions:', error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const checkSubmissionStatus = async () => {
-    try {
-      let userIdToCheck: string
-      
-      if (user) {
-        userIdToCheck = userId
-      } else if (anonymousUserId && anonymousUserName) {
-        // Check for submission with the name-based user_id format
-        userIdToCheck = `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
-      } else {
-        return // Can't check without user info
-      }
-      
-      const submission = await sessionService.checkSubmissionStatus(sessionId, userIdToCheck)
-
-      if (submission) {
-        setSubmittedUserId(submission.user_id)
-        setIsSubmitted(true)
-        loadAllAnswers()
-      }
-    } catch (error) {
-      // User hasn't submitted yet
-    }
-  }
-
-  const loadAllAnswers = async () => {
-    try {
-      const grouped = await sessionService.loadAllAnswers(sessionId)
-      setSubmittedAnswers(grouped)
-    } catch (error) {
-      console.error('Error loading answers:', error)
-    }
+  const handleToggleUserAnswersVisibility = () => {
+    const nextValue = !showAnswersForUser
+    setShowAnswersForUser(nextValue)
+    localStorage.setItem(userAnswersToggleKey, String(nextValue))
   }
 
   const handleAnswerChange = (questionId: string, value: string) => {
@@ -164,13 +212,13 @@ export default function SessionPage() {
     setIsSubmitting(true)
     try {
       // For anonymous users, use name in user_id format: "anon_<name>_<id>"
-      const finalUserId = user 
-        ? userId 
+      const finalUserId = user
+        ? userId
         : `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
-      
+
       // Store the submitted user ID for comparison later
       setSubmittedUserId(finalUserId)
-      
+
       // Store the name in localStorage
       if (!user) {
         localStorage.setItem(`anonymous_user_name_${sessionId}`, anonymousUserName.trim())
@@ -184,8 +232,10 @@ export default function SessionPage() {
 
       await sessionService.submitAnswers(sessionId, finalUserId, answerEntries)
 
+      // Ensure answers are shown after successful submit
+      setShowAnswersForUser(true)
+      localStorage.setItem(userAnswersToggleKey, 'true')
       setIsSubmitted(true)
-      loadAllAnswers()
     } catch (error) {
       console.error('Error submitting answers:', error)
       alert('Kunne ikke sende inn svar. Vennligst prøv igjen.')
@@ -214,7 +264,7 @@ export default function SessionPage() {
         newQuestionText,
         nextOrder
       )
-      
+
       setQuestions((prev) => [...prev, newQuestion])
       setNewQuestionText('')
       setShowQuestionInput(false)
@@ -240,7 +290,32 @@ export default function SessionPage() {
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
-        <SessionHeader sessionName={session?.name || null} sessionId={sessionId} />
+        <SessionHeader sessionName={session?.name || null} sessionId={sessionId}>
+          {isSubmitted && (
+            <div className="flex items-center justify-between gap-4 flex-col sm:flex-row sm:items-start">
+              <div>
+                <p className="text-gray-800 font-semibold">Vis svar i denne visningen</p>
+                <p className="text-sm text-gray-600">
+                  {showAnswersForUser
+                    ? 'Svarene vises nå. Slå av for å skjule dem.'
+                    : 'Svarene er skjult for deg. Slå på for å se dem.'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleToggleUserAnswersVisibility}
+                role="switch"
+                aria-checked={showAnswersForUser}
+                aria-label="Slå av/på visning av svar for deg"
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showAnswersForUser ? 'bg-green-500' : 'bg-gray-300'}`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${showAnswersForUser ? 'translate-x-5' : 'translate-x-1'}`}
+                />
+              </button>
+            </div>
+          )}
+        </SessionHeader>
 
         {!isSubmitted ? (
           <div className="space-y-4">
@@ -263,10 +338,9 @@ export default function SessionPage() {
                     onNameChange={setAnonymousUserName}
                   />
                 )}
-                {questions.map((question, index) => (
+                {questions.map((question) => (
                   <QuestionCard
                     key={question.id}
-                    questionNumber={index + 1}
                     questionText={question.question_text}
                     answer={answers[question.id] || ''}
                     onAnswerChange={(value) => handleAnswerChange(question.id, value)}
@@ -303,12 +377,14 @@ export default function SessionPage() {
         ) : (
           <div className="space-y-6">
             <SubmissionSuccess />
-            <AnswersView
-              questions={questions}
-              submittedAnswers={submittedAnswers}
-              currentUserId={userId}
-              submittedUserId={submittedUserId}
-            />
+            {isViewingAnswers ? (
+              <AnswersView
+                questions={questions}
+                submittedAnswers={submittedAnswers}
+                currentUserId={userId}
+                submittedUserId={submittedUserId}
+              />
+            ) : null}
           </div>
         )}
       </div>

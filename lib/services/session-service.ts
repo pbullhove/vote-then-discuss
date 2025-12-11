@@ -18,6 +18,7 @@ export interface Answer {
 export interface Session {
   id: string
   name: string | null
+  user_id: string
 }
 
 export interface Submission {
@@ -37,11 +38,12 @@ class SessionService {
     try {
       const { data, error } = await this.supabase
         .from('sessions')
-        .select('id, name')
+        .select('id, name, user_id')
         .eq('id', sessionId)
         .single()
 
       if (error) {
+        // Permission or not found
         if (
           error.code === 'PGRST116' ||
           error.message?.includes('permission') ||
@@ -50,11 +52,20 @@ class SessionService {
           console.error('Access denied or session not found:', error.message)
           return null
         }
+
         throw error
       }
       return data
     } catch (error) {
-      console.error('Error loading session data:', error)
+      // Log a more helpful error payload so we can see what went wrong in
+      // production (the Supabase client sometimes surfaces an empty object).
+      const message =
+        error instanceof Error
+          ? error.message
+          : typeof error === 'object' && error !== null
+            ? JSON.stringify(error)
+            : String(error)
+      console.error('Error loading session data:', message, error)
       return null
     }
   }
@@ -189,6 +200,31 @@ class SessionService {
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'answers' },
+        () => {
+          callback()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      this.supabase.removeChannel(channel)
+    }
+  }
+
+  subscribeToSession(
+    sessionId: string,
+    callback: () => void
+  ): () => void {
+    const channel = this.supabase
+      .channel(`session:${sessionId}:settings`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'sessions',
+          filter: `id=eq.${sessionId}`,
+        },
         () => {
           callback()
         }

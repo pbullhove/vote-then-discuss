@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
+import { UserAvatarMenu } from '@/components/UserAvatarMenu'
 
 interface Session {
   id: string
@@ -29,7 +30,7 @@ export default function Home() {
 
   const loadSessions = async () => {
     if (!user) return
-    
+
     setIsLoadingSessions(true)
     try {
       const { data, error } = await supabase
@@ -93,19 +94,11 @@ export default function Home() {
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-start mb-4">
+          <div className="flex items-center justify-between gap-4 mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote Then Discuss</h1>
-              <p className="text-sm text-gray-600">
-                Logget inn som {user.email}
-              </p>
+              <h1 className="text-3xl font-bold text-gray-800">Vote Then Discuss</h1>
             </div>
-            <button
-              onClick={signOut}
-              className="text-sm text-gray-600 hover:text-gray-800"
-            >
-              Logg ut
-            </button>
+            <UserAvatarMenu user={user} onSignOut={signOut} />
           </div>
           <p className="text-gray-600 mb-6">
             Opprett en økt med spørsmål. Brukere svarer privat, deretter ser alle svarene.

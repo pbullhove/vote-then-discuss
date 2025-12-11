@@ -27,12 +27,12 @@ export function AnswersView({
 }: AnswersViewProps) {
   return (
     <>
-      {questions.map((question, index) => {
+      {questions.map((question) => {
         const questionAnswers = submittedAnswers[question.id] || []
         return (
           <div key={question.id} className="bg-white rounded-2xl shadow-lg p-6">
             <h3 className="text-lg font-bold text-gray-800 mb-4">
-              Spørsmål {index + 1}: {question.question_text}
+              {question.question_text}
             </h3>
             <div className="space-y-3">
               {questionAnswers.length === 0 ? (

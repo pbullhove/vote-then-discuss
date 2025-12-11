@@ -1,22 +1,13 @@
 interface QuestionCardProps {
-  questionNumber: number
   questionText: string
   answer: string
   onAnswerChange: (value: string) => void
 }
 
-export function QuestionCard({
-  questionNumber,
-  questionText,
-  answer,
-  onAnswerChange,
-}: QuestionCardProps) {
+export function QuestionCard({ questionText, answer, onAnswerChange }: QuestionCardProps) {
   return (
     <div className="bg-white rounded-2xl shadow-lg p-6">
-      <label className="block text-gray-800 font-medium mb-2">
-        Spørsmål {questionNumber}
-      </label>
-      <p className="text-gray-700 mb-4">{questionText}</p>
+      <p className="block text-gray-800 font-medium mb-4">{questionText}</p>
       <textarea
         value={answer}
         onChange={(e) => onAnswerChange(e.target.value)}
