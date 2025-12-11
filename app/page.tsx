@@ -21,6 +21,12 @@ export default function Home() {
   const supabase = createClient()
 
   useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login')
+    }
+  }, [authLoading, user, router])
+
+  useEffect(() => {
     if (user && !authLoading) {
       loadSessions()
     } else if (!authLoading && !user) {
@@ -72,22 +78,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full text-center">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote Then Discuss</h1>
-          <p className="text-gray-600 mb-8">
-            Vennligst logg inn for å opprette og administrere dine avstemmingsøkter.
-          </p>
-          <button
-            onClick={() => router.push('/login')}
-            className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-          >
-            Logg inn
-          </button>
-        </div>
-      </div>
-    )
+    return null
   }
 
   return (
