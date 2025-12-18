@@ -5,6 +5,24 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
 
+const TrashIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    xmlns="http://www.w3.org/2000/svg"
+    fill="none"
+    viewBox="0 0 24 24"
+    strokeWidth={2}
+    stroke="currentColor"
+    aria-hidden="true"
+  >
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      d="M6 7h12m-9 0V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2m-7 0h8l-.8 12a2 2 0 0 1-2 2H9.8a2 2 0 0 1-2-2L7 7Zm3 4v6m4-6v6"
+    />
+  </svg>
+)
+
 interface Question {
   id: string
   text: string
@@ -140,9 +158,9 @@ export default function CreateSessionPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
+      <div className="max-w-4xl mx-auto flex flex-col gap-6">
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex justify-between items-center">
             <h1 className="text-2xl font-bold text-gray-800">Opprett ny økt</h1>
             <button
               onClick={() => router.push('/')}
@@ -164,32 +182,32 @@ export default function CreateSessionPage() {
             placeholder="Skriv inn et navn for denne økten..."
             className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 shadow-sm"
           />
+          <div className="mt-6">
+            <button
+              onClick={createSession}
+              disabled={isCreating || questions.filter((q) => q.text.trim()).length === 0}
+              className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? 'Oppretter økt...' : 'Opprett økt'}
+            </button>
+          </div>
         </div>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex justify-between items-center mb-4">
+        <div className="bg-white rounded-2xl shadow-lg p-6">
+          <div className="flex justify-between items-center">
             <h2 className="text-xl font-bold text-gray-800">Spørsmål</h2>
-            <button
-              onClick={addQuestion}
-              className="text-gray-600 hover:text-gray-800 font-medium"
-            >
-              + Legg til spørsmål
-            </button>
           </div>
 
           <div className="space-y-4">
             {questions.map((question, index) => (
               <div key={question.id} className="rounded-lg p-4">
                 <div className="flex justify-between items-start mb-2">
-                  <label className="block text-gray-800 font-medium">
-                    Spørsmål {index + 1}
-                  </label>
                   {questions.length > 1 && (
                     <button
                       onClick={() => removeQuestion(question.id)}
-                      className="text-red-600 hover:text-red-800 text-sm font-medium"
+                      className="hover:text-red-800 text-sm font-medium"
                     >
-                      Fjern
+                      <TrashIcon className="w-4 h-4" />
                     </button>
                   )}
                 </div>
@@ -204,16 +222,13 @@ export default function CreateSessionPage() {
             ))}
           </div>
         </div>
+        <button
+          onClick={addQuestion}
+          className="text-gray-600 hover:text-gray-800 font-medium"
+        >
+          + Legg til spørsmål
+        </button>
 
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <button
-            onClick={createSession}
-            disabled={isCreating || questions.filter((q) => q.text.trim()).length === 0}
-            className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isCreating ? 'Oppretter økt...' : 'Opprett økt'}
-          </button>
-        </div>
       </div>
     </div>
   )

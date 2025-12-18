@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Stem så diskuter",
+  title: "Stem",
   description: "Opprett avstemmingsøkter med spørsmål. Svar privat, deretter se alles svar.",
 };
 

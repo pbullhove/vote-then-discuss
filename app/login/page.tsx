@@ -2,9 +2,9 @@
 
 import { useAuth } from '@/lib/auth-context'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 
-export default function LoginPage() {
+function LoginContent() {
   const searchParams = useSearchParams()
   const redirectedFrom = searchParams.get('redirectedFrom')
   const { user, loading, signInWithGoogle } = useAuth()
@@ -15,7 +15,7 @@ export default function LoginPage() {
       console.log('redirecting to', redirectedFrom)
       router.push(redirectedFrom || '/')
     }
-  }, [user, loading, router])
+  }, [user, loading, router, redirectedFrom])
 
   if (loading) {
     return (
@@ -62,6 +62,20 @@ export default function LoginPage() {
         </button>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+          <div className="text-gray-600">Laster...</div>
+        </div>
+      }
+    >
+      <LoginContent />
+    </Suspense>
   )
 }
 

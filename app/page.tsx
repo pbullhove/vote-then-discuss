@@ -84,19 +84,19 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-gray-100 p-4">
       <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
-          <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 flex flex-col gap-6">
+          <div className="flex items-center justify-between">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Vote Then Discuss</h1>
             </div>
             <UserAvatarMenu user={user} onSignOut={signOut} />
           </div>
-          <p className="text-gray-600 mb-6">
-            Opprett en økt med spørsmål. Brukere svarer privat, deretter ser alle svarene.
+          <p className="text-gray-600">
+            Opprett en økt med spørsmål. Brukere svarer hver for seg først, deretter kan man lese gjennom og diskutere svarene.
           </p>
           <button
             onClick={createSession}
-            className="w-full bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
+            className="w-full cursor-pointer bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
           >
             Ny økt
           </button>

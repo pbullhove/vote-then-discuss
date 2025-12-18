@@ -61,11 +61,11 @@ export function UserAvatarMenu({ user, onSignOut }: UserAvatarMenuProps) {
       <button
         type="button"
         onClick={handleToggle}
-        className="flex items-center gap-3 rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-left shadow-sm hover:border-gray-300 hover:bg-white"
+        className="flex items-center gap-2 cursor-pointer rounded-full bg-gray-50 px-2 text-left hover:border-gray-300 hover:bg-white"
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
-        <div className="relative h-10 w-10 overflow-hidden rounded-full border border-gray-200 bg-gray-100 text-sm font-semibold text-gray-700">
+        <div className="relative h-8 w-8 overflow-hidden rounded-full border border-gray-200 bg-gray-100 text-sm font-semibold text-gray-700">
           {avatarUrl ? (
             <img
               src={avatarUrl}
@@ -81,19 +81,7 @@ export function UserAvatarMenu({ user, onSignOut }: UserAvatarMenuProps) {
         </div>
         <div className="hidden sm:flex flex-col items-start leading-tight">
           <span className="text-sm font-medium text-gray-800">{displayName}</span>
-          <span className="max-w-[180px] truncate text-xs text-gray-500">
-            {user.email}
-          </span>
         </div>
-        <svg
-          className={`h-4 w-4 text-gray-500 transition-transform ${isOpen ? 'rotate-180' : ''
-            }`}
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
       </button>
 
       {isOpen && (
@@ -110,3 +98,4 @@ export function UserAvatarMenu({ user, onSignOut }: UserAvatarMenuProps) {
     </div>
   )
 }
+
