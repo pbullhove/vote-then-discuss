@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/lib/auth-context'
-import { sessionService, type Question, type Answer } from '@/lib/services/session-service'
+import { sessionService, type Answer, type Question } from '@/lib/services/session-service'
 import { SessionHeader } from '@/components/session/SessionHeader'
 import { LoadingState } from '@/components/session/LoadingState'
 import { EmptyQuestionsState } from '@/components/session/EmptyQuestionsState'
@@ -12,6 +12,8 @@ import { AnonymousNameInput } from '@/components/session/AnonymousNameInput'
 import { QuestionCard } from '@/components/session/QuestionCard'
 import { SubmissionSuccess } from '@/components/session/SubmissionSuccess'
 import { AnswersView } from '@/components/session/AnswersView'
+import { AppShell } from '@/components/layout/AppShell'
+import { UserAvatarMenu } from '@/components/UserAvatarMenu'
 
 type SessionDetails = {
   id: string
@@ -21,7 +23,7 @@ type SessionDetails = {
 
 export default function SessionPage() {
   const params = useParams()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, signOut } = useAuth()
   const sessionId = params.id as string
 
   const [session, setSession] = useState<SessionDetails | null>(null)
@@ -39,11 +41,10 @@ export default function SessionPage() {
   const [anonymousUserName, setAnonymousUserName] = useState<string>('')
   const [submittedUserId, setSubmittedUserId] = useState<string>('')
 
-  // Generate or retrieve anonymous user ID and name for non-authenticated users
   useEffect(() => {
     if (!user && !authLoading) {
       let storedId = localStorage.getItem(`anonymous_user_id_${sessionId}`)
-      let storedName = localStorage.getItem(`anonymous_user_name_${sessionId}`)
+      const storedName = localStorage.getItem(`anonymous_user_name_${sessionId}`)
 
       if (!storedId) {
         storedId = `anon_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -52,7 +53,6 @@ export default function SessionPage() {
 
       if (storedName) {
         setAnonymousUserName(storedName)
-        // If we have a stored name, construct the submitted user ID format
         const expectedUserId = `anon_${storedName.trim()}_${storedId.split('_').slice(1).join('_')}`
         setSubmittedUserId(expectedUserId)
       }
@@ -63,15 +63,11 @@ export default function SessionPage() {
 
   const userId = user?.id || anonymousUserId
 
-  // Create stable dependency values to prevent array size changes
   const stableUserId = useMemo(() => user?.id || '', [user?.id])
   const stableAnonymousUserId = useMemo(() => anonymousUserId || '', [anonymousUserId])
   const stableAnonymousUserName = useMemo(() => anonymousUserName || '', [anonymousUserName])
   const isSessionOwner = !!(session?.user_id && user?.id === session.user_id)
-  const userAnswersToggleKey = useMemo(
-    () => `session_${sessionId}_answers_visible`,
-    [sessionId]
-  )
+  const userAnswersToggleKey = useMemo(() => `session_${sessionId}_answers_visible`, [sessionId])
   const isViewingAnswers = isSubmitted && showAnswersForUser
 
   useEffect(() => {
@@ -83,11 +79,7 @@ export default function SessionPage() {
 
   const loadSessionData = useCallback(async () => {
     const data = await sessionService.loadSession(sessionId)
-    if (data) {
-      setSession(data)
-    } else {
-      setSession(null)
-    }
+    setSession(data || null)
   }, [sessionId])
 
   const loadQuestions = useCallback(async () => {
@@ -108,10 +100,9 @@ export default function SessionPage() {
       if (user) {
         userIdToCheck = userId
       } else if (anonymousUserId && anonymousUserName) {
-        // Check for submission with the name-based user_id format
         userIdToCheck = `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
       } else {
-        return // Can't check without user info
+        return
       }
 
       const submission = await sessionService.checkSubmissionStatus(sessionId, userIdToCheck)
@@ -167,7 +158,6 @@ export default function SessionPage() {
     }
 
     loadAllAnswers()
-    // Subscribe to new answers
     const unsubscribe = sessionService.subscribeToAnswers(sessionId, () => {
       loadAllAnswers()
     })
@@ -196,13 +186,11 @@ export default function SessionPage() {
       return
     }
 
-    // For non-authenticated users, require a name
     if (!user && !anonymousUserName?.trim()) {
       alert('Vennligst skriv inn navnet ditt før du sender inn.')
       return
     }
 
-    // Check if all questions are answered
     const unanswered = questions.filter((q) => !answers[q.id]?.trim())
     if (unanswered.length > 0) {
       alert(`Vennligst svar på alle ${questions.length} spørsmål før du sender inn.`)
@@ -211,20 +199,16 @@ export default function SessionPage() {
 
     setIsSubmitting(true)
     try {
-      // For anonymous users, use name in user_id format: "anon_<name>_<id>"
       const finalUserId = user
         ? userId
         : `anon_${anonymousUserName.trim()}_${anonymousUserId.split('_').slice(1).join('_')}`
 
-      // Store the submitted user ID for comparison later
       setSubmittedUserId(finalUserId)
 
-      // Store the name in localStorage
       if (!user) {
         localStorage.setItem(`anonymous_user_name_${sessionId}`, anonymousUserName.trim())
       }
 
-      // Prepare answers for submission
       const answerEntries = questions.map((q) => ({
         question_id: q.id,
         answer_text: answers[q.id],
@@ -232,7 +216,6 @@ export default function SessionPage() {
 
       await sessionService.submitAnswers(sessionId, finalUserId, answerEntries)
 
-      // Ensure answers are shown after successful submit
       setShowAnswersForUser(true)
       localStorage.setItem(userAnswersToggleKey, 'true')
       setIsSubmitted(true)
@@ -259,11 +242,7 @@ export default function SessionPage() {
     setIsAddingQuestion(true)
     try {
       const nextOrder = questions.length + 1
-      const newQuestion = await sessionService.addQuestion(
-        sessionId,
-        newQuestionText,
-        nextOrder
-      )
+      const newQuestion = await sessionService.addQuestion(sessionId, newQuestionText, nextOrder)
 
       setQuestions((prev) => [...prev, newQuestion])
       setNewQuestionText('')
@@ -283,19 +262,34 @@ export default function SessionPage() {
     }
   }
 
+  const shellTitle = session?.name || 'Økt'
+  const shellDescription = `Økt-ID: ${sessionId}`
+
   if (authLoading || isLoading || (!user && !anonymousUserId)) {
-    return <LoadingState />
+    return (
+      <AppShell
+        title={shellTitle}
+        description={shellDescription}
+        userMenu={user ? <UserAvatarMenu user={user} onSignOut={signOut} /> : null}
+      >
+        <LoadingState />
+      </AppShell>
+    )
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-4xl mx-auto">
+    <AppShell
+      title={shellTitle}
+      description={shellDescription}
+      userMenu={user ? <UserAvatarMenu user={user} onSignOut={signOut} /> : null}
+    >
+      <div className="space-y-5">
         <SessionHeader sessionName={session?.name || null} sessionId={sessionId}>
           {isSubmitted && (
-            <div className="flex items-center justify-between gap-4 flex-col sm:flex-row sm:items-start">
+            <div className="flex flex-col gap-3 rounded-lg border border-[var(--border)] bg-white/70 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-gray-800 font-semibold">Vis svar i denne visningen</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-medium text-[var(--foreground)]">Vis svar i denne visningen</p>
+                <p className="text-sm text-[var(--muted-foreground)]">
                   {showAnswersForUser
                     ? 'Svarene vises nå. Slå av for å skjule dem.'
                     : 'Svarene er skjult for deg. Slå på for å se dem.'}
@@ -307,10 +301,12 @@ export default function SessionPage() {
                 role="switch"
                 aria-checked={showAnswersForUser}
                 aria-label="Slå av/på visning av svar for deg"
-                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showAnswersForUser ? 'bg-green-500' : 'bg-gray-300'}`}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${showAnswersForUser ? 'bg-green-500' : 'bg-[var(--border)]'
+                  }`}
               >
                 <span
-                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${showAnswersForUser ? 'translate-x-5' : 'translate-x-1'}`}
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-md transition-transform ${showAnswersForUser ? 'translate-x-5' : 'translate-x-1'
+                    }`}
                 />
               </button>
             </div>
@@ -356,17 +352,17 @@ export default function SessionPage() {
                     onKeyDown={handleQuestionInputKeyDown}
                   />
                 )}
-                <div className="bg-white rounded-2xl shadow-lg p-6 flex justify-between items-center">
+                <div className="flex flex-col gap-3 rounded-xl border border-[var(--border)] bg-white/70 p-5 sm:flex-row sm:items-center sm:justify-between">
                   <button
                     onClick={handleAddQuestionClick}
-                    className="text-gray-600 hover:text-gray-800 font-medium"
+                    className="text-sm font-medium text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
                   >
                     + Legg til et spørsmål til
                   </button>
                   <button
                     onClick={handleSubmit}
                     disabled={isSubmitting || (!user && !anonymousUserName?.trim())}
-                    className="bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-lg border border-[var(--border)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-[var(--accent-muted)] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     {isSubmitting ? 'Sender inn...' : 'Send inn svar'}
                   </button>
@@ -388,6 +384,6 @@ export default function SessionPage() {
           </div>
         )}
       </div>
-    </div>
+    </AppShell>
   )
 }

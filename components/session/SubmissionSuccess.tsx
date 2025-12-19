@@ -1,7 +1,8 @@
 export function SubmissionSuccess() {
   return (
-    <div className="bg-green-50 border-2 border-green-200 rounded-2xl p-6">
-      <h2 className="text-xl font-bold text-green-800">✓ Svar sendt inn!</h2>
+    <div className="rounded-xl border border-green-200 bg-green-50 px-5 py-4 shadow-sm">
+      <h2 className="text-lg font-semibold text-green-800">✓ Svar sendt inn!</h2>
+      <p className="text-sm text-green-700 mt-1">Svarene dine er lagret. Se oversikten under.</p>
     </div>
   )
 }

@@ -7,7 +7,7 @@ import type { User } from '@supabase/supabase-js'
 type AuthContextType = {
   user: User | null
   loading: boolean
-  signInWithGoogle: () => Promise<void>
+  signInWithGoogle: (next?: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -36,11 +36,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe()
   }, [supabase])
 
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (next?: string) => {
+    const nextPath = next ?? `${location.pathname}${location.search}`
+    const redirectTo = `${location.origin}/auth/callback?next=${encodeURIComponent(nextPath)}`
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}`,
+        redirectTo,
       },
     })
     if (error) {

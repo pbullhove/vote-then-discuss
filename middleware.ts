@@ -2,11 +2,12 @@ import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 // Define public routes that don't require authentication
-const publicRoutes = ['/login', '/auth', '/session']
+const publicRoutePrefixes = ['/login', '/auth', '/session']
 
 // Check if a route is public (doesn't require authentication)
 const isPublicRoute = (pathname: string): boolean => {
-  return publicRoutes.some((route) => pathname.startsWith(route))
+  if (pathname === '/') return true
+  return publicRoutePrefixes.some((route) => pathname.startsWith(route))
 }
 
 export async function middleware(request: NextRequest) {

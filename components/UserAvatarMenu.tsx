@@ -61,11 +61,11 @@ export function UserAvatarMenu({ user, onSignOut }: UserAvatarMenuProps) {
       <button
         type="button"
         onClick={handleToggle}
-        className="flex items-center gap-2 cursor-pointer rounded-full bg-gray-50 px-2 text-left hover:border-gray-300 hover:bg-white"
+        className="flex items-center gap-2 rounded-full border border-[var(--border)] bg-white/70 px-2 text-left shadow-sm transition hover:bg-[var(--muted)]"
         aria-haspopup="menu"
         aria-expanded={isOpen}
       >
-        <div className="relative h-8 w-8 overflow-hidden rounded-full border border-gray-200 bg-gray-100 text-sm font-semibold text-gray-700">
+        <div className="relative h-8 w-8 overflow-hidden rounded-full bg-[var(--muted)] text-sm font-semibold text-[var(--foreground)]">
           {avatarUrl ? (
             <img
               src={avatarUrl}
@@ -74,22 +74,20 @@ export function UserAvatarMenu({ user, onSignOut }: UserAvatarMenuProps) {
               referrerPolicy="no-referrer"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
-              {initials}
-            </div>
+            <div className="flex h-full w-full items-center justify-center">{initials}</div>
           )}
         </div>
         <div className="hidden sm:flex flex-col items-start leading-tight">
-          <span className="text-sm font-medium text-gray-800">{displayName}</span>
+          <span className="text-sm font-medium text-[var(--foreground)]">{displayName}</span>
         </div>
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-44 rounded-xl border border-gray-200 bg-white py-1 shadow-lg">
+        <div className="absolute right-0 mt-2 w-44 rounded-xl border border-[var(--border)] bg-white py-1 shadow-lg">
           <button
             type="button"
             onClick={handleSignOut}
-            className="w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+            className="w-full px-4 py-2 text-left text-sm text-[var(--foreground)] hover:bg-[var(--muted)]"
           >
             Logg ut
           </button>

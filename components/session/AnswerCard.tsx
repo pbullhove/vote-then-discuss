@@ -33,18 +33,18 @@ export function AnswerCard({ answer, currentUserId, submittedUserId }: AnswerCar
   })()
 
   return (
-    <div className="bg-gray-50 border-2 border-gray-200 rounded-lg p-4">
-      <div className="flex justify-between items-center gap-3">
+    <div className="rounded-lg border border-[var(--border)] bg-white/80 px-4 py-3 shadow-sm">
+      <div className="flex items-center justify-between gap-3">
         <div className="flex-1">
-          <span className="block text-xs text-gray-500 font-medium">{displayName}</span>
-          <p className="text-gray-800 mt-1">{answer.answer_text}</p>
+          <span className="block text-xs font-medium text-[var(--muted-foreground)]">
+            {displayName}
+          </span>
+          <p className="mt-1 text-[var(--foreground)] whitespace-pre-wrap">{answer.answer_text}</p>
         </div>
         {isCurrentUser && (
-          <div className="self-center">
-            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-              Ditt svar
-            </span>
-          </div>
+          <span className="self-center rounded-full border border-[var(--border)] bg-[var(--muted)] px-2 py-1 text-xs font-medium text-[var(--foreground)]">
+            Ditt svar
+          </span>
         )}
       </div>
     </div>

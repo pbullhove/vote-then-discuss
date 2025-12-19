@@ -6,13 +6,13 @@ interface QuestionCardProps {
 
 export function QuestionCard({ questionText, answer, onAnswerChange }: QuestionCardProps) {
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <p className="block text-gray-800 font-medium mb-4">{questionText}</p>
+    <div className="rounded-xl border border-[var(--border)] bg-white/70 p-5 shadow-sm">
+      <p className="block font-medium text-[var(--foreground)] mb-3">{questionText}</p>
       <textarea
         value={answer}
         onChange={(e) => onAnswerChange(e.target.value)}
         placeholder="Skriv svaret ditt her..."
-        className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 resize-none shadow-sm"
+        className="w-full rounded-lg border border-[var(--border)] bg-[var(--muted)] px-4 py-3 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:bg-white focus:outline-none"
         rows={4}
       />
     </div>

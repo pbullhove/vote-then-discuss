@@ -11,21 +11,21 @@ export function SessionHeader({ sessionName, sessionId, children }: SessionHeade
   const router = useRouter()
 
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6 mb-6">
+    <div className="rounded-xl border border-[var(--border)] bg-white/70 p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <span className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700">
+        <div className="space-y-1">
+          <span className="inline-flex items-center rounded-full border border-[var(--border)] bg-[var(--muted)] px-3 py-1 text-xs font-semibold text-[var(--muted-foreground)]">
             Økt-ID: {sessionId}
           </span>
-          <h1 className="mt-2 text-2xl font-bold text-gray-800">
+          <h1 className="text-2xl font-semibold text-[var(--foreground)]">
             {sessionName || 'Økt'}
           </h1>
         </div>
         <button
-          onClick={() => router.push('/')}
-          className="text-gray-800 hover:text-gray-600 cursor-pointer"
+          onClick={() => router.push('/workspace')}
+          className="text-sm text-[var(--muted-foreground)] underline decoration-[var(--border)] decoration-2 underline-offset-4 hover:text-[var(--foreground)]"
         >
-          ← Tilbake
+          Til arbeidsområde
         </button>
       </div>
       {children ? <div className="mt-4">{children}</div> : null}

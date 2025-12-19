@@ -1,150 +1,102 @@
 'use client'
 
-import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { useAuth } from '@/lib/auth-context'
-import { UserAvatarMenu } from '@/components/UserAvatarMenu'
+import { Navbar } from '@/components/layout/Navbar'
+import { primaryButtonClass } from '@/components/ui/PrimaryButton'
 
-interface Session {
-  id: string
-  name: string | null
-  created_at: string
-  updated_at: string
-}
+const normalizeSessionCode = (value: string) =>
+  value
+    .toUpperCase()
+    .replace(/\s+/g, '')
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 4)
 
 export default function Home() {
   const router = useRouter()
-  const { user, loading: authLoading, signOut } = useAuth()
-  const [sessions, setSessions] = useState<Session[]>([])
-  const [isLoadingSessions, setIsLoadingSessions] = useState(true)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login')
+  const [sessionCode, setSessionCode] = useState('')
+  const [isJoining, setIsJoining] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  const joinSession = async () => {
+    const code = normalizeSessionCode(sessionCode)
+    setSessionCode(code)
+    setErrorMessage(null)
+
+    if (code.length !== 4) {
+      setErrorMessage('Skriv inn en gyldig kode (4 tegn).')
+      return
     }
-  }, [authLoading, user, router])
 
-  useEffect(() => {
-    if (user && !authLoading) {
-      loadSessions()
-    } else if (!authLoading && !user) {
-      setIsLoadingSessions(false)
-    }
-  }, [user, authLoading])
-
-  const loadSessions = async () => {
-    if (!user) return
-
-    setIsLoadingSessions(true)
+    setIsJoining(true)
     try {
-      const { data, error } = await supabase
-        .from('sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
+      const { data, error } = await supabase.from('sessions').select('id').eq('id', code).single()
 
-      if (error) throw error
-      setSessions(data || [])
+      if (error || !data) {
+        setErrorMessage('Fant ingen økt med den koden. Sjekk koden og prøv igjen.')
+        return
+      }
+
+      router.push(`/session/${code}`)
     } catch (error) {
-      console.error('Error loading sessions:', error)
+      console.error('Error joining session:', error)
+      setErrorMessage('Kunne ikke sjekke økten akkurat nå. Prøv igjen om litt.')
     } finally {
-      setIsLoadingSessions(false)
+      setIsJoining(false)
     }
-  }
-
-  const createSession = () => {
-    router.push('/create-session')
-  }
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString)
-    return date.toLocaleDateString('nb-NO', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
-  }
-
-  if (authLoading || isLoadingSessions) {
-    return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Laster...</div>
-      </div>
-    )
-  }
-
-  if (!user) {
-    return null
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4">
-      <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 flex flex-col gap-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-800">Vote Then Discuss</h1>
-            </div>
-            <UserAvatarMenu user={user} onSignOut={signOut} />
-          </div>
-          <p className="text-gray-600">
-            Opprett en økt med spørsmål. Brukere svarer hver for seg først, deretter kan man lese gjennom og diskutere svarene.
-          </p>
-          <button
-            onClick={createSession}
-            className="w-full cursor-pointer bg-gray-800 text-white py-3 px-6 rounded-lg font-medium hover:bg-gray-700 transition-colors"
-          >
-            Ny økt
-          </button>
-        </div>
+    <div className="min-h-screen bg-[var(--background)] text-[var(--foreground)] flex flex-col">
+      <Navbar />
 
-        <div className="bg-white rounded-2xl shadow-lg p-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Mine økter</h2>
-          {sessions.length === 0 ? (
-            <p className="text-gray-600 text-center py-8">
-              Ingen økter ennå. Opprett din første økt for å komme i gang!
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {sessions.map((session) => (
-                <div
-                  key={session.id}
-                  className="border-2 border-gray-200 rounded-lg p-4 hover:border-gray-400 transition-colors cursor-pointer"
-                  onClick={() => router.push(`/session/${session.id}`)}
+      <main className="flex flex-1 items-center justify-center px-4 py-10 sm:px-6">
+        <div className="w-full max-w-xl -translate-y-12">
+          <div className="rounded-2xl border border-[var(--border)] bg-white/70 p-6 shadow-sm sm:p-8">
+            <form
+              className="space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault()
+                joinSession()
+              }}
+            >
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-stretch">
+                <input
+                  value={sessionCode}
+                  onChange={(e) => {
+                    setSessionCode(normalizeSessionCode(e.target.value))
+                    if (errorMessage) setErrorMessage(null)
+                  }}
+                  inputMode="text"
+                  autoCapitalize="characters"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  placeholder="Spillkode"
+                  aria-label="Øktkode"
+                  className="h-12 w-full rounded-xl border border-[var(--border)] bg-white px-4 text-center text-lg font-semibold tracking-[0.2em] text-[var(--foreground)] shadow-sm placeholder:tracking-normal placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={isJoining}
+                  className={`${primaryButtonClass} h-12 shrink-0 px-5`}
                 >
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <p className="font-medium text-gray-800">
-                        {session.name || `Økt ${session.id}`}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        ID: {session.id} • Opprettet {formatDate(session.created_at)}
-                      </p>
-                    </div>
-                    <svg
-                      className="w-5 h-5 text-gray-400"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 5l7 7-7 7"
-                      />
-                    </svg>
-                  </div>
+                  {isJoining ? 'Sjekker…' : 'Bli med'}
+                </button>
+              </div>
+
+              {errorMessage ? (
+                <div className="rounded-lg border border-[var(--border)] bg-[var(--muted)] px-4 py-3 text-sm text-[var(--foreground)]">
+                  {errorMessage}
                 </div>
-              ))}
-            </div>
-          )}
+              ) : null}
+            </form>
+          </div>
+
         </div>
-      </div>
+      </main>
     </div>
   )
 }

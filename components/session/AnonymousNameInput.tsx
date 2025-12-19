@@ -8,8 +8,8 @@ export function AnonymousNameInput({
   onNameChange,
 }: AnonymousNameInputProps) {
   return (
-    <div className="bg-white rounded-2xl shadow-lg p-6">
-      <label className="block text-gray-800 font-medium mb-2">
+    <div className="rounded-xl border border-[var(--border)] bg-white/70 p-5 shadow-sm">
+      <label className="block font-medium text-[var(--foreground)] mb-2">
         Ditt navn <span className="text-red-500">*</span>
       </label>
       <input
@@ -17,9 +17,9 @@ export function AnonymousNameInput({
         value={anonymousUserName}
         onChange={(e) => onNameChange(e.target.value)}
         placeholder="Skriv inn navnet ditt..."
-        className="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-4 text-gray-800 focus:outline-none focus:border-gray-400 shadow-sm"
+        className="w-full rounded-lg border border-[var(--border)] bg-[var(--muted)] px-4 py-3 text-[var(--foreground)] placeholder:text-[var(--muted-foreground)] focus:border-[var(--accent)] focus:bg-white focus:outline-none shadow-sm"
       />
-      <p className="text-sm text-gray-500 mt-2">
+      <p className="text-sm text-[var(--muted-foreground)] mt-2">
         Navnet ditt vil bli vist sammen med svarene dine.
       </p>
     </div>

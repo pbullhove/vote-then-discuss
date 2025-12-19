@@ -19,8 +19,8 @@ function LoginContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-        <div className="text-gray-600">Laster...</div>
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-[var(--muted-foreground)]">Laster...</div>
       </div>
     )
   }
@@ -30,15 +30,15 @@ function LoginContent() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-lg p-8 max-w-md w-full">
-        <h1 className="text-3xl font-bold text-gray-800 mb-2">Vote Then Discuss</h1>
-        <p className="text-gray-600 mb-8">
+    <div className="min-h-screen bg-[var(--background)] flex items-center justify-center p-4">
+      <div className="bg-white/80 border border-[var(--border)] rounded-2xl shadow-sm p-8 max-w-md w-full">
+        <h1 className="text-3xl font-bold text-[var(--foreground)] mb-2">Vote Then Discuss</h1>
+        <p className="text-[var(--muted-foreground)] mb-8">
           Logg inn med Google for å opprette og delta i avstemmingsøkter.
         </p>
         <button
-          onClick={signInWithGoogle}
-          className="w-full bg-white border-2 border-gray-300 text-gray-700 py-3 px-6 rounded-lg font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-3"
+          onClick={() => signInWithGoogle(redirectedFrom || '/')}
+          className="w-full bg-white border border-[var(--border)] text-[var(--foreground)] py-3 px-6 rounded-lg font-medium hover:bg-[var(--muted)] transition-colors flex items-center justify-center gap-3 shadow-sm"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
@@ -69,8 +69,8 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-gray-100 flex items-center justify-center">
-          <div className="text-gray-600">Laster...</div>
+        <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+          <div className="text-[var(--muted-foreground)]">Laster...</div>
         </div>
       }
     >
