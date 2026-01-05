@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -33,7 +33,7 @@ interface Question {
 export default function CreateSessionPage() {
   const router = useRouter()
   const { user, loading: authLoading, signOut } = useAuth()
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   const [sessionName, setSessionName] = useState('')
   const [questions, setQuestions] = useState<Question[]>([{ id: '1', text: '' }])
@@ -43,7 +43,18 @@ export default function CreateSessionPage() {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login')
+      const redirectedFrom =
+        typeof window !== 'undefined'
+          ? `${window.location.pathname}${window.location.search}`
+          : '/create-session'
+      const loginUrl = `/login?redirectedFrom=${encodeURIComponent(redirectedFrom)}`
+      console.log('[auth] Create-session unauthenticated; redirecting to login', {
+        authLoading,
+        userId: user?.id ?? null,
+        redirectedFrom,
+        loginUrl,
+      })
+      router.push(loginUrl)
     }
   }, [user, authLoading, router])
 

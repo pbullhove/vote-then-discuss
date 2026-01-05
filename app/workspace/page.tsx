@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/auth-context'
@@ -20,11 +20,20 @@ export default function WorkspacePage() {
   const { user, loading: authLoading, signOut } = useAuth()
   const [sessions, setSessions] = useState<Session[]>([])
   const [isLoadingSessions, setIsLoadingSessions] = useState(true)
-  const supabase = createClient()
+  const supabase = useMemo(() => createClient(), [])
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login')
+      const redirectedFrom =
+        typeof window !== 'undefined' ? `${window.location.pathname}${window.location.search}` : '/workspace'
+      const loginUrl = `/login?redirectedFrom=${encodeURIComponent(redirectedFrom)}`
+      console.log('[auth] Workspace unauthenticated; redirecting to login', {
+        authLoading,
+        userId: null,
+        redirectedFrom,
+        loginUrl,
+      })
+      router.push(loginUrl)
     }
   }, [authLoading, user, router])
 

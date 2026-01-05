@@ -40,7 +40,24 @@ export async function updateSession(request: NextRequest) {
 
   const {
     data: { user },
+    error,
   } = await supabase.auth.getUser()
+
+  const pathname = request.nextUrl.pathname
+  if (
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/create-session') ||
+    pathname.startsWith('/workspace')
+  ) {
+    console.log('[auth] updateSession getUser', {
+      pathname,
+      hasUser: Boolean(user),
+      userId: user?.id ?? null,
+      hasError: Boolean(error),
+      error: error ? { message: error.message, name: error.name, status: error.status } : null,
+    })
+  }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're
   // creating a new response object with NextResponse.next() make sure to:

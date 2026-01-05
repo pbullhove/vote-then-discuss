@@ -11,43 +11,73 @@ const isPublicRoute = (pathname: string): boolean => {
 }
 
 export async function middleware(request: NextRequest) {
-  const url = request.nextUrl.clone();
-  const host = request.headers.get('host') || '';
+  const url = request.nextUrl.clone()
+  const host = request.headers.get('host') || ''
 
   // 1) Host-based routing
   // Support both production and localhost for admin host
   const isAdminHost =
     host.startsWith('admin.votethendiscuss.com') ||
-    host.startsWith('localhost:') && host.includes('admin.');
+    (host.startsWith('localhost:') && host.includes('admin.'))
 
   // If admin.* and not already under /admin, internally rewrite to /admin + path
   if (isAdminHost && !url.pathname.startsWith('/admin')) {
-    url.pathname = '/admin' + url.pathname;
+    url.pathname = '/admin' + url.pathname
   }
 
   // 2) Update session (auth cookies + user)
-  const { response, user } = await updateSession(request);
+  const { response, user } = await updateSession(request)
 
   // Use the *effective* path (after host-based adjustment) for route protection
-  const effectivePathname = url.pathname;
+  const effectivePathname = url.pathname
+  const effectiveFullPath = `${url.pathname}${url.search}`
+  const shouldLogAuth =
+    effectivePathname.startsWith('/auth') ||
+    effectivePathname.startsWith('/login') ||
+    effectivePathname.startsWith('/create-session') ||
+    effectivePathname.startsWith('/workspace')
 
   // 3) Auth guard
   if (!isPublicRoute(effectivePathname)) {
     if (!user) {
-      const loginUrl = request.nextUrl.clone();
-      loginUrl.pathname = '/login';
-      loginUrl.searchParams.set('redirectedFrom', effectivePathname);
-      return NextResponse.redirect(loginUrl);
+      const loginUrl = request.nextUrl.clone()
+      loginUrl.pathname = '/login'
+      loginUrl.searchParams.set('redirectedFrom', effectiveFullPath)
+      if (shouldLogAuth) {
+        console.log('[auth] middleware redirecting to login', {
+          host,
+          originalPath: `${request.nextUrl.pathname}${request.nextUrl.search}`,
+          effectivePathname,
+          effectiveFullPath,
+          loginUrl: loginUrl.toString(),
+        })
+      }
+      return NextResponse.redirect(loginUrl)
     }
   }
 
   // 4) Apply rewrite for admin host (internal – no visible redirect)
   if (isAdminHost) {
-    return NextResponse.rewrite(url);
+    if (shouldLogAuth) {
+      console.log('[auth] middleware rewriting for admin host', {
+        host,
+        from: `${request.nextUrl.pathname}${request.nextUrl.search}`,
+        to: `${url.pathname}${url.search}`,
+      })
+    }
+    return NextResponse.rewrite(url)
   }
 
   // Non-admin host → normal response
-  return response;
+  if (shouldLogAuth) {
+    console.log('[auth] middleware allowing request', {
+      host,
+      effectivePathname,
+      hasUser: Boolean(user),
+      userId: user?.id ?? null,
+    })
+  }
+  return response
 }
 
 export const config = {

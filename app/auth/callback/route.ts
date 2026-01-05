@@ -8,9 +8,25 @@ export async function GET(request: Request) {
   // Prevent open redirects: only allow relative paths.
   const nextPath = nextParam.startsWith('/') ? nextParam : `/${nextParam}`
 
+  console.log('[auth] /auth/callback GET', {
+    origin: url.origin,
+    pathname: url.pathname,
+    hasCode: Boolean(code),
+    codeLength: code?.length ?? 0,
+    nextParam,
+    nextPath,
+    hostHeader: request.headers.get('host'),
+    forwardedHost: request.headers.get('x-forwarded-host'),
+    forwardedProto: request.headers.get('x-forwarded-proto'),
+  })
+
   if (code) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
+    console.log('[auth] /auth/callback exchangeCodeForSession result', {
+      hasError: Boolean(error),
+      error: error ? { message: error.message, name: error.name, status: error.status } : null,
+    })
     if (!error) {
       const forwardedHost = request.headers.get('x-forwarded-host') // original host before load balancer
       const forwardedProto = request.headers.get('x-forwarded-proto')
@@ -30,19 +46,33 @@ export async function GET(request: Request) {
         host.endsWith('.localhost')
 
       if (isLocalHost) {
-        return NextResponse.redirect(`${url.origin}${nextPath}`)
+        const destination = `${url.origin}${nextPath}`
+        console.log('[auth] /auth/callback redirect (localhost)', { host, destination })
+        return NextResponse.redirect(destination)
       }
 
       if (forwardedHost) {
         const proto = forwardedProto ?? 'https'
-        return NextResponse.redirect(`${proto}://${forwardedHost}${nextPath}`)
+        const destination = `${proto}://${forwardedHost}${nextPath}`
+        console.log('[auth] /auth/callback redirect (forwardedHost)', {
+          host,
+          forwardedHost,
+          forwardedProto,
+          destination,
+        })
+        return NextResponse.redirect(destination)
       }
 
-      return NextResponse.redirect(`${url.origin}${nextPath}`)
+      const destination = `${url.origin}${nextPath}`
+      console.log('[auth] /auth/callback redirect (default)', { host, destination })
+      return NextResponse.redirect(destination)
     }
   }
 
   // return the user to an error page with instructions
+  console.warn('[auth] /auth/callback missing code or exchange failed; redirecting to error', {
+    origin: url.origin,
+  })
   return NextResponse.redirect(`${url.origin}/auth/auth-code-error`)
 }
 
